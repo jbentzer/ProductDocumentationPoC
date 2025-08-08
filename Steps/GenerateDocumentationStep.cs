@@ -1,6 +1,8 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
+using Data;
+
 namespace Steps;
 
 public sealed class GenerateDocumentationStep : KernelProcessStep<GeneratedDocumentationState>
@@ -24,8 +26,10 @@ public sealed class GenerateDocumentationStep : KernelProcessStep<GeneratedDocum
     }
 
     [KernelFunction]
-    public async Task<string?> GenerateDocumentationAsync(Kernel kernel, string productInfo)
+    public async Task GenerateDocumentationAsync(Kernel kernel, KernelProcessStepContext context, string productInfo)
     {
+        Console.WriteLine($"[{nameof(GenerateDocumentationStep)}]:\tGenerating documentation for provided productInfo...");
+
         // Add the new product info to the chat history
         this._state.ChatHistory!.AddUserMessage($"Product Info:\n\n{productInfo}");
 
@@ -33,13 +37,21 @@ public sealed class GenerateDocumentationStep : KernelProcessStep<GeneratedDocum
         IChatCompletionService chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
         var generatedDocumentationResponse = await chatCompletionService.GetChatMessageContentAsync(this._state.ChatHistory!);
 
-        var documentationString = generatedDocumentationResponse.Content!.ToString();
+        DocumentInfo generatedContent = new()
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = $"Generated document - {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+            Content = generatedDocumentationResponse.Content!,
+        };
 
-        return documentationString;
+        this._state!.LastGeneratedDocument = generatedContent;
+
+        await context.EmitEventAsync("DocumentationGenerated", generatedContent);
     }
 }
 
 public class GeneratedDocumentationState
 {
+    public DocumentInfo LastGeneratedDocument { get; set; } = new();
     public ChatHistory? ChatHistory { get; set; }
 }
